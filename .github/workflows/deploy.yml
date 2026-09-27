@@ -1,0 +1,53 @@
+name: Security Scan and Deploy
+
+# 1. Trigger the workflow every time code is pushed to the main branch
+on:
+  pull_request:
+    branches: ["main"]
+
+# 2. Grant permissions required for security scanning and GitHub Pages hosting
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  # JOB 1: Scan the code for flaws and secrets
+  security-and-lint:
+    runs-on: ubuntu-latest
+    steps:
+      # Step A: Download a copy of your code into GitHub's cloud server
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetches all history (required by Gitleaks to scan past commits)
+
+      # Step B: Scan for hardcoded passwords, tokens, or API keys
+      - name: Run Gitleaks Secret Scanner
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITLEAKS }}
+
+      # Step C: Verify the HTML code has correct basic syntax
+      - name: Check HTML Linting
+        run: |
+          npm install -g htmlhint
+          htmlhint index.html
+
+  # JOB 2: Deploy the website (Only runs if JOB 1 completely passes)
+  deploy-site:
+    needs: security-and-lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step D: Package the HTML file so GitHub Pages can read it
+      - name: Upload website artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.' # Tells GitHub to upload everything in the root folder
+
+      # Step E: Publish the website to the internet live
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
